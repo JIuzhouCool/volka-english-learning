@@ -1,20 +1,21 @@
 ---
 name: youtube-english-learning
-description: Turn a YouTube English teaching video or pasted transcript into one polished Chinese-assisted study document. Use when the user wants to learn from a YouTube English lesson, extract the creator's intended vocabulary and phrases, and receive a final study note with IPA, Chinese meanings, examples, usage notes, review cards, and exercises. Prefer publishing to Feishu when configured; otherwise deliver Markdown.
+description: Turn a YouTube English teaching video or pasted transcript into one polished Chinese-assisted study document. Use when the user wants to learn from a YouTube English lesson, extract the creator's intended vocabulary and phrases, and receive a final study note with IPA, Chinese meanings, examples, usage notes, review cards, and exercises. Requires Supadata for YouTube transcript extraction. Prefer publishing to Feishu when configured; otherwise deliver Markdown.
 ---
 
 # YouTube English Learning
 
 ## Goal
 
-Create one final study document for Chinese-speaking English learners. Prefer a Feishu document when Feishu is configured; otherwise create a local Markdown document. Transcript extraction is only an internal step; do not deliver a separate transcript unless the user explicitly asks for it.
+Create one final study document for Chinese-speaking English learners. Use Supadata to extract YouTube transcripts. Prefer a Feishu document when Feishu is configured; otherwise create a local Markdown document. Transcript extraction is only an internal step; do not deliver a separate transcript unless the user explicitly asks for it.
 
 ## Workflow
 
 1. Get lesson text.
    - If the user provides a YouTube URL, run `scripts/extract_youtube_transcript.py`.
-   - The script uses Supadata first when `SUPADATA_API_KEY` is set, then falls back to `youtube-transcript-api`.
-   - If both providers fail, ask the user to paste the transcript.
+   - The script requires `SUPADATA_API_KEY` and only uses Supadata.
+   - Default Supadata mode is `auto`: use existing captions first, then generate a transcript with AI if captions are unavailable.
+   - If Supadata is not configured, quota-limited, rate-limited, or fails, ask the user to configure Supadata, retry later, or paste the transcript.
    - If the user already provides transcript text, use it directly.
 2. Read `references/vocabulary_selection.md` before selecting vocabulary.
 3. Read `references/learning_doc_template.md` before writing the document.
@@ -40,25 +41,25 @@ Run from the skill directory or pass the full path:
 python scripts/extract_youtube_transcript.py "https://www.youtube.com/watch?v=VIDEO_ID" --output transcript.md
 ```
 
-Options:
+Useful options:
 
 ```powershell
-python scripts/extract_youtube_transcript.py "URL" --provider supadata
-python scripts/extract_youtube_transcript.py "URL" --provider local-api
-python scripts/extract_youtube_transcript.py "URL" --supadata-mode auto
+python scripts/extract_youtube_transcript.py "URL" --format text
+python scripts/extract_youtube_transcript.py "URL" --supadata-mode native
+python scripts/extract_youtube_transcript.py "URL" --supadata-mode generate
 ```
 
 Configure Supadata with:
 
 ```powershell
-$env:SUPADATA_API_KEY="your_key"
+$env:SUPADATA_API_KEY="your_supadata_key"
 ```
 
-Default Supadata mode is `native`, which uses existing captions and avoids unnecessary generated transcription credits. Use `--supadata-mode auto` only when the user wants stronger transcript fallback.
+The default `auto` mode works best for normal use: it prefers existing captions and can spend AI generated transcript credits when captions are unavailable. Use `--supadata-mode native` only when the user explicitly wants to avoid generated transcript credits.
 
 The helper supports Supadata's immediate transcript responses and async `jobId` responses. For async jobs, it polls briefly and reports a clear retry message if the transcript is still not ready.
 
-Do not use `yt-dlp`, download audio, or run local speech recognition in this workflow.
+Do not use local transcript fallback libraries, `yt-dlp`, audio downloads, or local speech recognition in this workflow.
 
 ## Feishu Publishing Helper
 

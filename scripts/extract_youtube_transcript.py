@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Extract English transcripts from YouTube videos.
+"""Extract English transcripts from YouTube videos with Supadata.
 
-Default strategy:
-1. Use Supadata first when SUPADATA_API_KEY is configured.
-2. Fall back to youtube-transcript-api for local, no-key extraction.
-3. If both fail, ask the user to paste the transcript.
+SUPADATA_API_KEY is required. By default this script uses Supadata mode
+``auto``: fetch existing captions first, then generate a transcript with AI
+when captions are unavailable.
 
-This script intentionally does not use yt-dlp, download audio, or run local ASR.
+This script intentionally does not use yt-dlp, download audio, run local ASR,
+or fall back to local transcript libraries.
 """
 
 from __future__ import annotations
@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import Any
 
 
-LANGUAGE_PRIORITY = ("en", "en-US", "en-GB")
 SUPADATA_TRANSCRIPT_URL = "https://api.supadata.ai/v1/transcript"
 SUPADATA_MAX_POLL_ATTEMPTS = 12
 SUPADATA_POLL_INTERVAL_SECONDS = 5
@@ -43,7 +42,7 @@ class TranscriptResult:
     title: str = "YouTube video"
     creator: str = "Unknown"
     language: str = "en"
-    transcript_source: str = "unknown"
+    transcript_source: str = "Supadata API"
 
 
 def extract_video_id(url_or_id: str) -> str:
@@ -93,17 +92,6 @@ def dedupe_adjacent(lines: list[str]) -> list[str]:
     return deduped
 
 
-def english_language_codes(candidates: list[Any]) -> list[str]:
-    found: list[str] = []
-    for candidate in candidates:
-        lang = getattr(candidate, "language_code", "")
-        if lang.startswith("en") and lang not in found:
-            found.append(lang)
-    prioritized = [lang for lang in LANGUAGE_PRIORITY if lang in found]
-    prioritized.extend(sorted(lang for lang in found if lang not in prioritized))
-    return prioritized
-
-
 def extract_lines_from_supadata_payload(payload: Any) -> list[str]:
     if isinstance(payload, str):
         return dedupe_adjacent(payload.splitlines())
@@ -148,7 +136,7 @@ def supadata_payload_error(payload: Any) -> str:
         message = error.get("message") or error.get("error") or error.get("details")
         if message:
             return str(message)
-    return "Unknown Supadata error."
+    return str(payload.get("message") or payload.get("msg") or "Unknown Supadata error.")
 
 
 def supadata_error_message(status: int, body: str) -> str:
@@ -197,7 +185,10 @@ def request_supadata_json(url: str, api_key: str) -> tuple[int, Any]:
 def supadata_result_from_payload(payload: Any, source_url: str, transcript_source: str) -> TranscriptResult:
     lines = extract_lines_from_supadata_payload(payload)
     if not lines:
-        raise TranscriptError("Supadata returned a response, but no transcript text was found.")
+        raise TranscriptError(
+            "Supadata returned a response, but no transcript text was found. "
+            "Retry later or paste the transcript directly."
+        )
 
     title = "YouTube video"
     creator = "Unknown"
@@ -255,9 +246,9 @@ def fetch_with_supadata(url_or_id: str, mode: str) -> TranscriptResult:
     api_key = os.environ.get("SUPADATA_API_KEY", "").strip()
     if not api_key:
         raise TranscriptError(
-            "SUPADATA_API_KEY is not set.\n\n"
-            "Configure it in PowerShell with:\n"
-            '  $env:SUPADATA_API_KEY="your_key"'
+            "SUPADATA_API_KEY is required.\n\n"
+            "Get a key at https://dash.supadata.ai and configure it, for example:\n"
+            '  $env:SUPADATA_API_KEY="your_supadata_key"'
         )
 
     source_url = canonical_youtube_url(url_or_id)
@@ -281,57 +272,6 @@ def fetch_with_supadata(url_or_id: str, mode: str) -> TranscriptResult:
     return supadata_result_from_payload(payload, source_url, f"Supadata API ({mode})")
 
 
-def fetch_with_transcript_api(url_or_id: str) -> TranscriptResult:
-    try:
-        from youtube_transcript_api import YouTubeTranscriptApi
-    except ImportError as exc:
-        raise TranscriptError(
-            "youtube-transcript-api is not installed.\n\n"
-            "Install it with:\n"
-            "  python -m pip install youtube-transcript-api"
-        ) from exc
-
-    video_id = extract_video_id(url_or_id)
-    api = YouTubeTranscriptApi()
-
-    try:
-        transcript_list = api.list(video_id)
-        transcripts = list(transcript_list)
-        languages = english_language_codes(transcripts)
-        if not languages:
-            available = ", ".join(getattr(item, "language_code", "?") for item in transcripts) or "none"
-            raise TranscriptError(
-                "youtube-transcript-api found transcripts, but none were English.\n\n"
-                f"Available transcript languages: {available}"
-            )
-
-        try:
-            transcript = transcript_list.find_manually_created_transcript(languages)
-        except Exception:
-            transcript = transcript_list.find_generated_transcript(languages)
-
-        fetched = transcript.fetch()
-        raw_items = fetched.to_raw_data()
-    except TranscriptError:
-        raise
-    except Exception as exc:
-        raise TranscriptError(f"youtube-transcript-api could not fetch this transcript: {exc}") from exc
-
-    lines = dedupe_adjacent([item.get("text", "") for item in raw_items])
-    if not lines:
-        raise TranscriptError("youtube-transcript-api returned an empty transcript.")
-
-    language = getattr(transcript, "language_code", languages[0])
-    is_generated = bool(getattr(transcript, "is_generated", False))
-    source = "youtube-transcript-api automatic captions" if is_generated else "youtube-transcript-api manual subtitles"
-    return TranscriptResult(
-        lines=lines,
-        source_url=f"https://www.youtube.com/watch?v={video_id}",
-        language=language,
-        transcript_source=source,
-    )
-
-
 def to_markdown(result: TranscriptResult) -> str:
     body = "\n".join(f"- {line}" for line in result.lines)
     return (
@@ -349,43 +289,15 @@ def to_text(lines: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def extract(url: str, output_format: str, provider: str, supadata_mode: str) -> str:
-    errors: list[str] = []
-    result: TranscriptResult | None = None
-
-    if provider in {"auto", "supadata"}:
-        try:
-            result = fetch_with_supadata(url, supadata_mode)
-        except TranscriptError as exc:
-            errors.append(f"Supadata: {exc}")
-            if provider == "supadata":
-                raise
-
-    if result is None and provider in {"auto", "local-api"}:
-        try:
-            result = fetch_with_transcript_api(url)
-        except TranscriptError as exc:
-            errors.append(f"youtube-transcript-api: {exc}")
-            if provider == "local-api":
-                raise
-
-    if result is None:
-        raise TranscriptError(
-            "Could not extract an English transcript with the available providers.\n\n"
-            + "\n\n".join(errors)
-            + "\n\nNext steps:\n"
-            "  1. Set SUPADATA_API_KEY and retry.\n"
-            "  2. Or install youtube-transcript-api: python -m pip install youtube-transcript-api\n"
-            "  3. Or paste the transcript directly."
-        )
-
+def extract(url: str, output_format: str, supadata_mode: str) -> str:
+    result = fetch_with_supadata(url, supadata_mode)
     if output_format == "text":
         return to_text(result.lines)
     return to_markdown(result)
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Extract English YouTube transcripts.")
+    parser = argparse.ArgumentParser(description="Extract English YouTube transcripts with Supadata.")
     parser.add_argument("url", help="YouTube video URL or video ID")
     parser.add_argument("--output", "-o", help="Write transcript to this file instead of stdout")
     parser.add_argument(
@@ -395,21 +307,15 @@ def main() -> int:
         help="Output format. Default: markdown",
     )
     parser.add_argument(
-        "--provider",
-        choices=("auto", "supadata", "local-api"),
-        default="auto",
-        help="Transcript provider. Default: auto uses Supadata, then youtube-transcript-api.",
-    )
-    parser.add_argument(
         "--supadata-mode",
         choices=("native", "auto", "generate"),
-        default="native",
-        help="Supadata mode. Default: native uses existing captions only.",
+        default="auto",
+        help="Supadata mode. Default: auto fetches existing captions, then generates with AI if needed.",
     )
     args = parser.parse_args()
 
     try:
-        transcript = extract(args.url, args.format, args.provider, args.supadata_mode)
+        transcript = extract(args.url, args.format, args.supadata_mode)
     except TranscriptError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
