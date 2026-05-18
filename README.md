@@ -1,124 +1,132 @@
-# YouTube English Learning Skill
+# YouTube English Learning
 
-把 YouTube 英语教学视频整理成中文辅助学习文档：先用 Supadata 获取或生成英文 transcript，再生成学习笔记。默认优先发布到飞书；没有配置飞书或发布失败时，生成本地 Markdown。
+把 YouTube 英语教学视频整理成中文辅助学习文档。流程是：用 Supadata 获取英文 transcript，生成中文辅助学习笔记；如果已配置飞书，就发布为飞书新版文档，否则输出本地 Markdown。
 
-## 1. 直接让 Codex 安装
+## 1. 安装
 
-在 Codex 里直接说：
+在 Codex 里运行：
 
 ```text
 请使用 $skill-installer 安装这个 skill：
 https://github.com/JIuzhouCool/youtube-english-learning
 ```
 
-安装后重启 Codex，让 skill 被重新发现。
+安装完成后重启 Codex。
 
-也可以手动运行安装脚本。
-
-Windows PowerShell：
-
-```powershell
-python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" --repo JIuzhouCool/youtube-english-learning --path . --name youtube-english-learning
-```
-
-macOS/Linux：
-
-```bash
-python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo JIuzhouCool/youtube-english-learning --path . --name youtube-english-learning
-```
-
-手动 clone：
+也可以手动安装：
 
 ```powershell
 git clone https://github.com/JIuzhouCool/youtube-english-learning.git "$env:USERPROFILE\.codex\skills\youtube-english-learning"
 ```
 
+macOS/Linux：
+
 ```bash
 git clone https://github.com/JIuzhouCool/youtube-english-learning.git ~/.codex/skills/youtube-english-learning
 ```
 
-## 2. Supadata，必选
+## 2. 配置 Supadata
 
-这个 skill 只通过 Supadata API 获取 YouTube transcript。
+Supadata 是必需项，用来获取 YouTube transcript。
 
-- API key 申请：<https://dash.supadata.ai>
-- Free 用户额度：每月 100 credits，限速 1 req/s。
-- 已有 transcript 通常消耗 1 credit。
-- 没有已有字幕时，默认允许 AI generated transcript，按 2 credits/min 消耗。
+1. 打开 <https://dash.supadata.ai> 申请 API key。
+2. 设置环境变量。
 
-配置 `SUPADATA_API_KEY` 后才能用 YouTube URL 自动提取字幕。
+Windows PowerShell：
 
-## 3. 飞书，可选
+```powershell
+setx SUPADATA_API_KEY "your_supadata_key"
+```
 
-配置飞书后，最终学习笔记会优先创建为飞书文档。
+macOS/Linux：
 
-- 应用管理：<https://open.feishu.cn/app>
-- 创建「企业自建应用」。
-- 在「凭证与基础信息」获取 `App ID` 和 `App Secret`。
-- 给应用开通创建、编辑云文档所需权限。
+```bash
+echo 'export SUPADATA_API_KEY="your_supadata_key"' >> ~/.zshrc
+source ~/.zshrc
+```
 
-获取 `FEISHU_FOLDER_TOKEN`：
+`setx` 后需要重新打开终端或重启 Codex。
+
+## 3. 配置飞书，可选
+
+配置飞书后，学习笔记会发布到授权用户的飞书云空间。
+
+### 3.1 创建飞书应用
+
+1. 打开 <https://open.feishu.cn/app>。
+2. 创建「企业自建应用」。
+3. 在「凭证与基础信息」复制 `App ID` 和 `App Secret`。
+4. 在应用里配置 OAuth 重定向 URL，例如 `https://example.com/callback`。
+5. 给应用开通云文档权限，至少需要新版文档创建/编辑权限和 `offline_access`。
+
+### 3.2 设置飞书环境变量
+
+Windows PowerShell：
+
+```powershell
+setx FEISHU_APP_ID "cli_xxx"
+setx FEISHU_APP_SECRET "your_feishu_secret"
+```
+
+macOS/Linux：
+
+```bash
+cat >> ~/.zshrc <<'EOF'
+export FEISHU_APP_ID="cli_xxx"
+export FEISHU_APP_SECRET="your_feishu_secret"
+EOF
+source ~/.zshrc
+```
+
+### 3.3 完成用户授权
+
+生成授权链接：
+
+```powershell
+python scripts/publish_feishu_doc.py --auth-url "https://example.com/callback"
+```
+
+打开输出的链接并完成授权。页面跳转后，从地址栏复制 `code` 参数，然后运行：
+
+```powershell
+python scripts/publish_feishu_doc.py --auth-code "paste_code_here"
+```
+
+成功后会输出：
+
+```text
+FEISHU_AUTH_SAVED
+```
+
+授权 token 会保存到：
+
+```text
+%USERPROFILE%\.codex\youtube-english-learning\feishu_state.json
+```
+
+### 3.4 指定飞书文件夹，可选
+
+如果想把文档放到某个固定文件夹：
 
 1. 打开飞书云文档里的目标文件夹。
-2. 复制浏览器地址栏链接或文件夹分享链接。
-3. 找到 `/folder/` 后面的字符串。
+2. 复制文件夹链接。
+3. 取 `/folder/` 后面的 token。
+
+示例：
 
 ```text
 https://xxx.feishu.cn/drive/folder/fldcnxxxxxxxxxxxxxx
 ```
 
-这里的 `fldcnxxxxxxxxxxxxxx` 就是 `FEISHU_FOLDER_TOKEN`。它是可选项，不设置时会尝试创建到默认位置。
-
-## 4. 设置环境变量
-
-Windows PowerShell，当前会话：
+设置：
 
 ```powershell
-$env:SUPADATA_API_KEY="your_supadata_key"
-$env:FEISHU_APP_ID="cli_xxx"
-$env:FEISHU_APP_SECRET="your_feishu_secret"
-$env:FEISHU_FOLDER_TOKEN="fldcnxxxxxxxxxxxxxx"
-$env:YOUTUBE_ENGLISH_OUTPUT_DIR="D:\notes\english"
-```
-
-Windows PowerShell，持久化：
-
-```powershell
-setx SUPADATA_API_KEY "your_supadata_key"
-setx FEISHU_APP_ID "cli_xxx"
-setx FEISHU_APP_SECRET "your_feishu_secret"
 setx FEISHU_FOLDER_TOKEN "fldcnxxxxxxxxxxxxxx"
-setx YOUTUBE_ENGLISH_OUTPUT_DIR "D:\notes\english"
 ```
 
-`setx` 后需要重新打开终端或重启 Codex。
+不设置 `FEISHU_FOLDER_TOKEN` 时，飞书会使用授权用户的默认文档位置。
 
-macOS/Linux，当前会话：
-
-```bash
-export SUPADATA_API_KEY="your_supadata_key"
-export FEISHU_APP_ID="cli_xxx"
-export FEISHU_APP_SECRET="your_feishu_secret"
-export FEISHU_FOLDER_TOKEN="fldcnxxxxxxxxxxxxxx"
-export YOUTUBE_ENGLISH_OUTPUT_DIR="$HOME/notes/english"
-```
-
-macOS/Linux，持久化：
-
-```bash
-cat >> ~/.zshrc <<'EOF'
-export SUPADATA_API_KEY="your_supadata_key"
-export FEISHU_APP_ID="cli_xxx"
-export FEISHU_APP_SECRET="your_feishu_secret"
-export FEISHU_FOLDER_TOKEN="fldcnxxxxxxxxxxxxxx"
-export YOUTUBE_ENGLISH_OUTPUT_DIR="$HOME/notes/english"
-EOF
-source ~/.zshrc
-```
-
-不要把真实 API key、App Secret 或 token 提交到 GitHub。
-
-## 5. 在 Codex 中使用
+## 4. 使用
 
 分析 YouTube 视频：
 
@@ -127,7 +135,7 @@ Use $youtube-english-learning to analyze this YouTube English lesson:
 https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
-直接粘贴 transcript：
+也可以直接粘贴 transcript：
 
 ```text
 Use $youtube-english-learning to turn this transcript into a Chinese-assisted study note:
@@ -135,33 +143,24 @@ Use $youtube-english-learning to turn this transcript into a Chinese-assisted st
 [paste transcript here]
 ```
 
-交付规则：
+输出规则：
 
-- 飞书发布成功：只返回飞书文档链接。
-- 飞书未配置：生成 Markdown 文件。
-- 飞书发布失败：生成 Markdown 兜底，并说明失败原因。
+- 飞书配置完整：返回飞书文档链接。
+- 飞书未配置或发布失败：生成本地 Markdown。
+- Markdown 默认写入 `outputs/`，也可以用 `YOUTUBE_ENGLISH_OUTPUT_DIR` 指定目录。
 
-## 6. Markdown 输出
+## 5. 常用命令
 
-没有飞书或飞书发布失败时，最终学习笔记会写成 Markdown。
-
-- 默认目录：`outputs/`
-- 自定义目录：`YOUTUBE_ENGLISH_OUTPUT_DIR`
-- 支持绝对路径和相对路径
-- 相对路径按 skill 根目录解析
-
-## 7. 可选脚本命令
-
-提取 transcript：
+手动提取 transcript：
 
 ```powershell
 python scripts/extract_youtube_transcript.py "https://www.youtube.com/watch?v=VIDEO_ID" --output transcript.md
 ```
 
-默认 `--supadata-mode auto`，会优先取已有字幕；没有字幕时允许 AI 生成。想节省额度时可手动使用：
+只使用已有字幕，避免 AI 转写消耗更多额度：
 
 ```powershell
-python scripts/extract_youtube_transcript.py "URL" --supadata-mode native
+python scripts/extract_youtube_transcript.py "https://www.youtube.com/watch?v=VIDEO_ID" --supadata-mode native --output transcript.md
 ```
 
 发布 Markdown 到飞书：
@@ -170,26 +169,23 @@ python scripts/extract_youtube_transcript.py "URL" --supadata-mode native
 python scripts/publish_feishu_doc.py --input outputs/video-title-study-notes.md --title "Video Title English Study Notes"
 ```
 
-飞书发布脚本退出码：
+查看当前飞书发布位置：
 
-- `0`：成功，stdout 输出飞书文档 URL。
-- `1`：飞书已配置但发布失败。
-- `2`：飞书未配置。
+```powershell
+python scripts/publish_feishu_doc.py --print-location
+```
 
-## 8. 学习文档内容
+清除本地飞书授权：
 
-学习文档会包含：
+```powershell
+python scripts/publish_feishu_doc.py --clear-auth
+```
 
-- 视频信息和中文摘要
-- `UP 主本课重点`
-- 重点词汇、短语、IPA、中文含义、语境解释、原文例句和学习例句
-- 易混点、用法提醒、发音提示
-- 复习卡片、小测和今日练习
+## 6. 排错
 
-选词规则见 `references/vocabulary_selection.md`，文档模板见 `references/learning_doc_template.md`。
+- `FEISHU_NOT_CONFIGURED`：没有配置 `FEISHU_APP_ID` / `FEISHU_APP_SECRET`，或还没有运行 `--auth-code` 保存用户授权。
+- 飞书授权链接打不开：检查应用的 OAuth 重定向 URL 是否和 `--auth-url` 参数完全一致。
+- 文档没有进指定文件夹：检查 `FEISHU_FOLDER_TOKEN` 是否来自授权用户可访问的文件夹。
+- YouTube transcript 获取失败：检查 `SUPADATA_API_KEY`、Supadata 额度和视频是否有可用字幕。
 
-## 注意事项
-
-- 不使用本地字幕回退、`yt-dlp`、音频下载或本地语音识别。
-- transcript 只是中间步骤，默认不要作为最终交付。
-- IPA 不确定时标记为 `approx.` 或 `近似`。
+不要把真实 API key、App Secret、OAuth code 或 token 提交到 GitHub。
