@@ -14,9 +14,11 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import re
+import time
 import sys
 import urllib.error
 import urllib.parse
@@ -27,10 +29,34 @@ from typing import Any
 
 FEISHU_BASE_URL = "https://open.feishu.cn/open-apis"
 NOT_CONFIGURED_MESSAGE = "FEISHU_NOT_CONFIGURED"
+DEFAULT_SKILL_FOLDER_NAME = "YouTube English Learning Notes"
+FOLDER_PERMISSION_ERROR_CODES = {1061004, 1770040}
+FOLDER_NOT_FOUND_ERROR_CODES = {1061003}
 
 
 class FeishuError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, api_code: int | None = None) -> None:
+        super().__init__(message)
+        self.api_code = api_code
+
+
+def api_code_from_data(data: dict[str, Any]) -> int | None:
+    code = data.get("code")
+    if isinstance(code, int):
+        return code
+    if isinstance(code, str) and code.isdigit():
+        return int(code)
+    return None
+
+
+def api_code_from_raw(raw: str) -> int | None:
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(data, dict):
+        return api_code_from_data(data)
+    return None
 
 
 def read_markdown(input_path: str | None) -> str:
@@ -39,10 +65,73 @@ def read_markdown(input_path: str | None) -> str:
     return Path(input_path).read_text(encoding="utf-8")
 
 
+def state_file_path() -> Path:
+    configured = os.environ.get("YOUTUBE_ENGLISH_FEISHU_STATE_FILE", "").strip()
+    if configured:
+        return Path(configured).expanduser()
+
+    codex_home = os.environ.get("CODEX_HOME", "").strip()
+    base_dir = Path(codex_home).expanduser() if codex_home else Path.home() / ".codex"
+    return base_dir / "youtube-english-learning" / "feishu_state.json"
+
+
+def load_saved_folder_token() -> str:
+    path = state_file_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return ""
+    token = data.get("folder_token") if isinstance(data, dict) else ""
+    return str(token).strip() if token else ""
+
+
+def save_folder_token(folder_token: str, folder_url: str = "") -> None:
+    path = state_file_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "folder_token": folder_token,
+        "folder_url": folder_url,
+        "folder_name": DEFAULT_SKILL_FOLDER_NAME,
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def clear_saved_folder_token() -> None:
+    try:
+        state_file_path().unlink()
+    except FileNotFoundError:
+        return
+    except OSError:
+        return
+
+
+def windows_environment_value(name: str) -> str:
+    if os.name != "nt":
+        return ""
+    try:
+        import winreg
+    except ImportError:
+        return ""
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            value, _ = winreg.QueryValueEx(key, name)
+    except OSError:
+        return ""
+    return os.path.expandvars(str(value))
+
+
+def config_value(name: str) -> str:
+    value = os.environ.get(name, "").strip()
+    if value:
+        return value
+    return windows_environment_value(name).strip()
+
+
 def feishu_config() -> tuple[str, str, str]:
-    app_id = os.environ.get("FEISHU_APP_ID", "").strip()
-    app_secret = os.environ.get("FEISHU_APP_SECRET", "").strip()
-    folder_token = os.environ.get("FEISHU_FOLDER_TOKEN", "").strip()
+    app_id = config_value("FEISHU_APP_ID")
+    app_secret = config_value("FEISHU_APP_SECRET")
+    folder_token = config_value("FEISHU_FOLDER_TOKEN")
     if not app_id or not app_secret:
         raise FeishuError(NOT_CONFIGURED_MESSAGE)
     return app_id, app_secret, folder_token
@@ -66,14 +155,22 @@ def request_json(
         headers["authorization"] = f"Bearer {token}"
 
     request = urllib.request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(request, timeout=45) as response:
-            raw = response.read().decode("utf-8", errors="replace")
-    except urllib.error.HTTPError as exc:
-        raw = exc.read().decode("utf-8", errors="replace")
-        raise FeishuError(f"Feishu HTTP {exc.code}: {raw[:800]}") from exc
-    except urllib.error.URLError as exc:
-        raise FeishuError(f"Feishu request failed: {exc}") from exc
+    last_error: urllib.error.URLError | None = None
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                raw = response.read().decode("utf-8", errors="replace")
+            break
+        except urllib.error.HTTPError as exc:
+            raw = exc.read().decode("utf-8", errors="replace")
+            raise FeishuError(f"Feishu HTTP {exc.code}: {raw[:800]}", api_code=api_code_from_raw(raw)) from exc
+        except urllib.error.URLError as exc:
+            last_error = exc
+            if attempt == 2:
+                raise FeishuError(f"Feishu request failed: {exc}") from exc
+            time.sleep(1 + attempt)
+    else:
+        raise FeishuError(f"Feishu request failed: {last_error}")
 
     try:
         data: dict[str, Any] = json.loads(raw)
@@ -83,7 +180,7 @@ def request_json(
     code = data.get("code", 0)
     if code not in (0, None):
         message = data.get("msg") or data.get("message") or "unknown error"
-        raise FeishuError(f"Feishu API error {code}: {message}")
+        raise FeishuError(f"Feishu API error {code}: {message}", api_code=api_code_from_data(data))
     return data
 
 
@@ -119,17 +216,62 @@ def create_document(token: str, title: str, folder_token: str = "") -> tuple[str
     return str(document_id), str(url)
 
 
-def convert_markdown_with_feishu(token: str, document_id: str, markdown: str) -> list[dict[str, Any]]:
+def create_folder(token: str, name: str, parent_folder_token: str = "") -> tuple[str, str]:
     data = request_json(
         "POST",
-        f"/docx/v1/documents/{urllib.parse.quote(document_id)}/convert",
+        "/drive/v1/files/create_folder",
+        token=token,
+        payload={"name": name, "folder_token": parent_folder_token},
+    )
+    folder = data.get("data", {})
+    folder_token = folder.get("token") if isinstance(folder, dict) else ""
+    if not folder_token:
+        raise FeishuError(f"Feishu create folder response did not include token: {data}")
+    folder_url = folder.get("url") or f"https://feishu.cn/drive/folder/{folder_token}"
+    return str(folder_token), str(folder_url)
+
+
+def ensure_skill_folder(token: str, parent_folder_token: str = "", *, ignore_saved: bool = False) -> str:
+    saved_folder_token = "" if ignore_saved else load_saved_folder_token()
+    if saved_folder_token:
+        return saved_folder_token
+
+    try:
+        folder_token, folder_url = create_folder(token, DEFAULT_SKILL_FOLDER_NAME, parent_folder_token)
+    except FeishuError as exc:
+        if not parent_folder_token or exc.api_code not in FOLDER_PERMISSION_ERROR_CODES:
+            raise
+        folder_token, folder_url = create_folder(token, DEFAULT_SKILL_FOLDER_NAME, "")
+
+    save_folder_token(folder_token, folder_url)
+    return folder_token
+
+
+def converted_blocks_payload(token: str, markdown: str) -> tuple[list[dict[str, Any]], list[str]]:
+    data = request_json(
+        "POST",
+        "/docx/v1/documents/blocks/convert",
         token=token,
         payload={"content_type": "markdown", "content": markdown},
     )
     blocks = data.get("data", {}).get("blocks") or data.get("data", {}).get("children")
+    first_level_block_ids = data.get("data", {}).get("first_level_block_ids") or []
     if not isinstance(blocks, list) or not blocks:
         raise FeishuError("Feishu Markdown converter returned no blocks.")
-    return [block for block in blocks if isinstance(block, dict)]
+    if not isinstance(first_level_block_ids, list) or not first_level_block_ids:
+        raise FeishuError("Feishu Markdown converter returned no first-level block IDs.")
+    return [block for block in blocks if isinstance(block, dict)], [str(block_id) for block_id in first_level_block_ids]
+
+
+def clean_converted_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cleaned = copy.deepcopy(blocks)
+    for block in cleaned:
+        block.pop("parent_id", None)
+        if block.get("block_type") == 31 and isinstance(block.get("table"), dict):
+            property_data = block["table"].get("property")
+            if isinstance(property_data, dict):
+                property_data.pop("merge_info", None)
+    return cleaned
 
 
 def text_elements(content: str) -> list[dict[str, Any]]:
@@ -212,27 +354,67 @@ def append_blocks(token: str, document_id: str, blocks: list[dict[str, Any]]) ->
         )
 
 
+def append_markdown(token: str, document_id: str, markdown: str) -> None:
+    blocks, first_level_block_ids = converted_blocks_payload(token, markdown)
+    request_json(
+        "POST",
+        f"/docx/v1/documents/{urllib.parse.quote(document_id)}/blocks/"
+        f"{urllib.parse.quote(document_id)}/descendant",
+        token=token,
+        payload={
+            "children_id": first_level_block_ids,
+            "descendants": clean_converted_blocks(blocks),
+            "index": -1,
+        },
+    )
+
+
 def publish(markdown: str, title: str) -> str:
     app_id, app_secret, folder_token = feishu_config()
     token = get_tenant_access_token(app_id, app_secret)
-    document_id, document_url = create_document(token, title, folder_token)
+    folder_token = ensure_skill_folder(token, folder_token)
+    try:
+        document_id, document_url = create_document(token, title, folder_token)
+    except FeishuError as exc:
+        if exc.api_code not in FOLDER_NOT_FOUND_ERROR_CODES | FOLDER_PERMISSION_ERROR_CODES:
+            raise
+        clear_saved_folder_token()
+        folder_token = ensure_skill_folder(token, "", ignore_saved=True)
+        document_id, document_url = create_document(token, title, folder_token)
 
     try:
-        blocks = convert_markdown_with_feishu(token, document_id, markdown)
+        append_markdown(token, document_id, markdown)
     except FeishuError:
         blocks = markdown_to_basic_blocks(markdown)
+        append_blocks(token, document_id, blocks)
 
-    append_blocks(token, document_id, blocks)
     return document_url
+
+
+def current_feishu_location() -> dict[str, str]:
+    app_id, app_secret, parent_folder_token = feishu_config()
+    token = get_tenant_access_token(app_id, app_secret)
+    folder_token = ensure_skill_folder(token, parent_folder_token)
+    return {
+        "folder_token": folder_token,
+        "folder_url": f"https://feishu.cn/drive/folder/{folder_token}",
+        "state_file": str(state_file_path()),
+    }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish a Markdown study note to Feishu Docx.")
     parser.add_argument("--input", "-i", help="Markdown input file. Omit or pass '-' to read stdin.")
-    parser.add_argument("--title", "-t", required=True, help="Feishu document title.")
+    parser.add_argument("--title", "-t", help="Feishu document title.")
+    parser.add_argument("--print-location", action="store_true", help="Print the Feishu folder location and exit.")
     args = parser.parse_args()
 
     try:
+        if args.print_location:
+            print(json.dumps(current_feishu_location(), ensure_ascii=False, indent=2))
+            return 0
+        if not args.title:
+            parser.error("--title is required unless --print-location is used")
         markdown = read_markdown(args.input)
         url = publish(markdown, args.title)
     except FeishuError as exc:
