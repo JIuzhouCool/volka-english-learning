@@ -14,6 +14,7 @@ Exit codes:
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import os
 import re
@@ -246,17 +247,31 @@ def ensure_skill_folder(token: str, parent_folder_token: str = "", *, ignore_sav
     return folder_token
 
 
-def convert_markdown_with_feishu(token: str, document_id: str, markdown: str) -> list[dict[str, Any]]:
+def converted_blocks_payload(token: str, markdown: str) -> tuple[list[dict[str, Any]], list[str]]:
     data = request_json(
         "POST",
-        f"/docx/v1/documents/{urllib.parse.quote(document_id)}/convert",
+        "/docx/v1/documents/blocks/convert",
         token=token,
         payload={"content_type": "markdown", "content": markdown},
     )
     blocks = data.get("data", {}).get("blocks") or data.get("data", {}).get("children")
+    first_level_block_ids = data.get("data", {}).get("first_level_block_ids") or []
     if not isinstance(blocks, list) or not blocks:
         raise FeishuError("Feishu Markdown converter returned no blocks.")
-    return [block for block in blocks if isinstance(block, dict)]
+    if not isinstance(first_level_block_ids, list) or not first_level_block_ids:
+        raise FeishuError("Feishu Markdown converter returned no first-level block IDs.")
+    return [block for block in blocks if isinstance(block, dict)], [str(block_id) for block_id in first_level_block_ids]
+
+
+def clean_converted_blocks(blocks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cleaned = copy.deepcopy(blocks)
+    for block in cleaned:
+        block.pop("parent_id", None)
+        if block.get("block_type") == 31 and isinstance(block.get("table"), dict):
+            property_data = block["table"].get("property")
+            if isinstance(property_data, dict):
+                property_data.pop("merge_info", None)
+    return cleaned
 
 
 def text_elements(content: str) -> list[dict[str, Any]]:
@@ -339,6 +354,21 @@ def append_blocks(token: str, document_id: str, blocks: list[dict[str, Any]]) ->
         )
 
 
+def append_markdown(token: str, document_id: str, markdown: str) -> None:
+    blocks, first_level_block_ids = converted_blocks_payload(token, markdown)
+    request_json(
+        "POST",
+        f"/docx/v1/documents/{urllib.parse.quote(document_id)}/blocks/"
+        f"{urllib.parse.quote(document_id)}/descendant",
+        token=token,
+        payload={
+            "children_id": first_level_block_ids,
+            "descendants": clean_converted_blocks(blocks),
+            "index": -1,
+        },
+    )
+
+
 def publish(markdown: str, title: str) -> str:
     app_id, app_secret, folder_token = feishu_config()
     token = get_tenant_access_token(app_id, app_secret)
@@ -353,21 +383,38 @@ def publish(markdown: str, title: str) -> str:
         document_id, document_url = create_document(token, title, folder_token)
 
     try:
-        blocks = convert_markdown_with_feishu(token, document_id, markdown)
+        append_markdown(token, document_id, markdown)
     except FeishuError:
         blocks = markdown_to_basic_blocks(markdown)
+        append_blocks(token, document_id, blocks)
 
-    append_blocks(token, document_id, blocks)
     return document_url
+
+
+def current_feishu_location() -> dict[str, str]:
+    app_id, app_secret, parent_folder_token = feishu_config()
+    token = get_tenant_access_token(app_id, app_secret)
+    folder_token = ensure_skill_folder(token, parent_folder_token)
+    return {
+        "folder_token": folder_token,
+        "folder_url": f"https://feishu.cn/drive/folder/{folder_token}",
+        "state_file": str(state_file_path()),
+    }
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish a Markdown study note to Feishu Docx.")
     parser.add_argument("--input", "-i", help="Markdown input file. Omit or pass '-' to read stdin.")
-    parser.add_argument("--title", "-t", required=True, help="Feishu document title.")
+    parser.add_argument("--title", "-t", help="Feishu document title.")
+    parser.add_argument("--print-location", action="store_true", help="Print the Feishu folder location and exit.")
     args = parser.parse_args()
 
     try:
+        if args.print_location:
+            print(json.dumps(current_feishu_location(), ensure_ascii=False, indent=2))
+            return 0
+        if not args.title:
+            parser.error("--title is required unless --print-location is used")
         markdown = read_markdown(args.input)
         url = publish(markdown, args.title)
     except FeishuError as exc:

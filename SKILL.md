@@ -29,6 +29,18 @@ Create one final Chinese-assisted English study document from a YouTube English 
    - Feishu configured but failed: write a Markdown fallback and briefly mention the Feishu failure.
 6. For Markdown fallback, use `YOUTUBE_ENGLISH_OUTPUT_DIR` when set; otherwise write to `outputs/` under the skill directory. Create the directory first.
 
+## Encoding Notes
+
+- Treat all skill Markdown files as UTF-8. On Windows PowerShell, read them with `Get-Content -Raw -Encoding UTF8 ...` or Python `Path.read_text(encoding="utf-8")`; default PowerShell decoding may display valid Chinese text as mojibake.
+- If Chinese appears garbled in terminal output, verify file bytes with an explicit UTF-8 read before editing the file.
+
+## Feishu Location
+
+- Feishu publishing uses a tenant/app token. Documents may not appear in the user's personal "My Space" unless the configured `FEISHU_FOLDER_TOKEN` points to a user-visible folder where the app has permission.
+- The publisher stores the reusable skill folder token in `%USERPROFILE%\.codex\youtube-english-learning\feishu_state.json` by default.
+- To locate the folder used by the publisher, run `python scripts/publish_feishu_doc.py --print-location`.
+- If the user wants documents to appear in their own Feishu cloud space, ask them to create/share a target folder with the app and set `FEISHU_FOLDER_TOKEN`; do not silently fall back to an invisible app-owned location when discoverability matters.
+
 ## Output Rules
 
 - Deliver only one final study document.
