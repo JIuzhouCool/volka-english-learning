@@ -51,7 +51,7 @@ Create one final Chinese-assisted English study document from a YouTube English 
 ## Study Document Requirements
 
 - Video information and a short Chinese summary.
-- A section named `UP 主本课重点`.
+- A section for the creator's key lesson points.
 - 15-25 high-value vocabulary or phrase items by default.
 - For each item: English, IPA, Chinese meaning, context explanation, original sentence, learner example, and common collocations or patterns.
 - Pronunciation or usage notes for tricky items.
