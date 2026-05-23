@@ -3,7 +3,6 @@
 
 Configuration:
 - FEISHU_APP_ID and FEISHU_APP_SECRET are required.
-- FEISHU_FOLDER_TOKEN is optional.
 
 Exit codes:
 - 0: published successfully; stdout contains the document URL.
@@ -29,9 +28,6 @@ from typing import Any
 
 FEISHU_BASE_URL = "https://open.feishu.cn/open-apis"
 NOT_CONFIGURED_MESSAGE = "FEISHU_NOT_CONFIGURED"
-DEFAULT_SKILL_FOLDER_NAME = "YouTube English Learning Notes"
-FOLDER_PERMISSION_ERROR_CODES = {1061004, 1770040}
-FOLDER_NOT_FOUND_ERROR_CODES = {1061003}
 
 
 class FeishuError(RuntimeError):
@@ -73,46 +69,6 @@ def delete_published_markdown(input_path: str | None) -> None:
         path.unlink()
 
 
-def state_file_path() -> Path:
-    configured = os.environ.get("YOUTUBE_ENGLISH_FEISHU_STATE_FILE", "").strip()
-    if configured:
-        return Path(configured).expanduser()
-
-    codex_home = os.environ.get("CODEX_HOME", "").strip()
-    base_dir = Path(codex_home).expanduser() if codex_home else Path.home() / ".codex"
-    return base_dir / "youtube-english-learning" / "feishu_state.json"
-
-
-def load_saved_folder_token() -> str:
-    path = state_file_path()
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return ""
-    token = data.get("folder_token") if isinstance(data, dict) else ""
-    return str(token).strip() if token else ""
-
-
-def save_folder_token(folder_token: str, folder_url: str = "") -> None:
-    path = state_file_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = {
-        "folder_token": folder_token,
-        "folder_url": folder_url,
-        "folder_name": DEFAULT_SKILL_FOLDER_NAME,
-    }
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def clear_saved_folder_token() -> None:
-    try:
-        state_file_path().unlink()
-    except FileNotFoundError:
-        return
-    except OSError:
-        return
-
-
 def windows_environment_value(name: str) -> str:
     if os.name != "nt":
         return ""
@@ -136,13 +92,12 @@ def config_value(name: str) -> str:
     return windows_environment_value(name).strip()
 
 
-def feishu_config() -> tuple[str, str, str]:
+def feishu_config() -> tuple[str, str]:
     app_id = config_value("FEISHU_APP_ID")
     app_secret = config_value("FEISHU_APP_SECRET")
-    folder_token = config_value("FEISHU_FOLDER_TOKEN")
     if not app_id or not app_secret:
         raise FeishuError(NOT_CONFIGURED_MESSAGE)
-    return app_id, app_secret, folder_token
+    return app_id, app_secret
 
 
 def request_json(
@@ -204,10 +159,8 @@ def get_tenant_access_token(app_id: str, app_secret: str) -> str:
     return str(token)
 
 
-def create_document(token: str, title: str, folder_token: str = "") -> tuple[str, str]:
+def create_document(token: str, title: str) -> tuple[str, str]:
     payload: dict[str, Any] = {"title": title}
-    if folder_token:
-        payload["folder_token"] = folder_token
 
     data = request_json("POST", "/docx/v1/documents", token=token, payload=payload)
     document = data.get("data", {}).get("document") or data.get("data", {})
@@ -222,37 +175,6 @@ def create_document(token: str, title: str, folder_token: str = "") -> tuple[str
 
     url = document.get("url") or document.get("document_url") or f"https://feishu.cn/docx/{document_id}"
     return str(document_id), str(url)
-
-
-def create_folder(token: str, name: str, parent_folder_token: str = "") -> tuple[str, str]:
-    data = request_json(
-        "POST",
-        "/drive/v1/files/create_folder",
-        token=token,
-        payload={"name": name, "folder_token": parent_folder_token},
-    )
-    folder = data.get("data", {})
-    folder_token = folder.get("token") if isinstance(folder, dict) else ""
-    if not folder_token:
-        raise FeishuError(f"Feishu create folder response did not include token: {data}")
-    folder_url = folder.get("url") or f"https://feishu.cn/drive/folder/{folder_token}"
-    return str(folder_token), str(folder_url)
-
-
-def ensure_skill_folder(token: str, parent_folder_token: str = "", *, ignore_saved: bool = False) -> str:
-    saved_folder_token = "" if ignore_saved else load_saved_folder_token()
-    if saved_folder_token:
-        return saved_folder_token
-
-    try:
-        folder_token, folder_url = create_folder(token, DEFAULT_SKILL_FOLDER_NAME, parent_folder_token)
-    except FeishuError as exc:
-        if not parent_folder_token or exc.api_code not in FOLDER_PERMISSION_ERROR_CODES:
-            raise
-        folder_token, folder_url = create_folder(token, DEFAULT_SKILL_FOLDER_NAME, "")
-
-    save_folder_token(folder_token, folder_url)
-    return folder_token
 
 
 def converted_blocks_payload(token: str, markdown: str) -> tuple[list[dict[str, Any]], list[str]]:
@@ -378,17 +300,9 @@ def append_markdown(token: str, document_id: str, markdown: str) -> None:
 
 
 def publish(markdown: str, title: str) -> str:
-    app_id, app_secret, folder_token = feishu_config()
+    app_id, app_secret = feishu_config()
     token = get_tenant_access_token(app_id, app_secret)
-    folder_token = ensure_skill_folder(token, folder_token)
-    try:
-        document_id, document_url = create_document(token, title, folder_token)
-    except FeishuError as exc:
-        if exc.api_code not in FOLDER_NOT_FOUND_ERROR_CODES | FOLDER_PERMISSION_ERROR_CODES:
-            raise
-        clear_saved_folder_token()
-        folder_token = ensure_skill_folder(token, "", ignore_saved=True)
-        document_id, document_url = create_document(token, title, folder_token)
+    document_id, document_url = create_document(token, title)
 
     try:
         append_markdown(token, document_id, markdown)
@@ -399,30 +313,15 @@ def publish(markdown: str, title: str) -> str:
     return document_url
 
 
-def current_feishu_location() -> dict[str, str]:
-    app_id, app_secret, parent_folder_token = feishu_config()
-    token = get_tenant_access_token(app_id, app_secret)
-    folder_token = ensure_skill_folder(token, parent_folder_token)
-    return {
-        "folder_token": folder_token,
-        "folder_url": f"https://feishu.cn/drive/folder/{folder_token}",
-        "state_file": str(state_file_path()),
-    }
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description="Publish a Markdown study note to Feishu Docx.")
     parser.add_argument("--input", "-i", help="Markdown input file. Omit or pass '-' to read stdin.")
     parser.add_argument("--title", "-t", help="Feishu document title.")
-    parser.add_argument("--print-location", action="store_true", help="Print the Feishu folder location and exit.")
     args = parser.parse_args()
 
     try:
-        if args.print_location:
-            print(json.dumps(current_feishu_location(), ensure_ascii=False, indent=2))
-            return 0
         if not args.title:
-            parser.error("--title is required unless --print-location is used")
+            parser.error("--title is required")
         markdown = read_markdown(args.input)
         url = publish(markdown, args.title)
         delete_published_markdown(args.input)

@@ -57,24 +57,6 @@ git clone https://github.com/JIuzhouCool/youtube-english-learning.git ~/.codex/s
 - 在「凭证与基础信息」获取 `App ID` 和 `App Secret`。
 - 给应用开通创建、编辑云文档所需权限。
 
-获取 `FEISHU_FOLDER_TOKEN`：
-
-1. 打开飞书云文档里的目标文件夹。
-2. 复制浏览器地址栏链接或文件夹分享链接。
-3. 找到 `/folder/` 后面的字符串。
-
-```text
-https://xxx.feishu.cn/drive/folder/fldcnxxxxxxxxxxxxxx
-```
-
-这里的 `fldcnxxxxxxxxxxxxxx` 就是 `FEISHU_FOLDER_TOKEN`。它是可选项，不设置时会尝试创建到默认位置。
-
-查看当前会使用的飞书文件夹位置：
-
-```powershell
-python scripts/publish_feishu_doc.py --print-location
-```
-
 ## 4. 设置环境变量
 
 Windows PowerShell，当前会话：
@@ -83,7 +65,6 @@ Windows PowerShell，当前会话：
 $env:SUPADATA_API_KEY="your_supadata_key"
 $env:FEISHU_APP_ID="cli_xxx"
 $env:FEISHU_APP_SECRET="your_feishu_secret"
-$env:FEISHU_FOLDER_TOKEN="fldcnxxxxxxxxxxxxxx"
 $env:YOUTUBE_ENGLISH_OUTPUT_DIR="D:\notes\english"
 ```
 
@@ -93,7 +74,6 @@ Windows PowerShell，持久化：
 setx SUPADATA_API_KEY "your_supadata_key"
 setx FEISHU_APP_ID "cli_xxx"
 setx FEISHU_APP_SECRET "your_feishu_secret"
-setx FEISHU_FOLDER_TOKEN "fldcnxxxxxxxxxxxxxx"
 setx YOUTUBE_ENGLISH_OUTPUT_DIR "D:\notes\english"
 ```
 
@@ -105,7 +85,6 @@ macOS/Linux，当前会话：
 export SUPADATA_API_KEY="your_supadata_key"
 export FEISHU_APP_ID="cli_xxx"
 export FEISHU_APP_SECRET="your_feishu_secret"
-export FEISHU_FOLDER_TOKEN="fldcnxxxxxxxxxxxxxx"
 export YOUTUBE_ENGLISH_OUTPUT_DIR="$HOME/notes/english"
 ```
 
@@ -116,7 +95,6 @@ cat >> ~/.zshrc <<'EOF'
 export SUPADATA_API_KEY="your_supadata_key"
 export FEISHU_APP_ID="cli_xxx"
 export FEISHU_APP_SECRET="your_feishu_secret"
-export FEISHU_FOLDER_TOKEN="fldcnxxxxxxxxxxxxxx"
 export YOUTUBE_ENGLISH_OUTPUT_DIR="$HOME/notes/english"
 EOF
 source ~/.zshrc
@@ -157,33 +135,7 @@ Use $youtube-english-learning to turn this transcript into a Chinese-assisted st
 - 相对路径按 skill 根目录解析
 - 发布脚本会删除 `--input` 指向的 Markdown；如果从 stdin 读取内容发布，则不会删除本地文件。
 
-## 7. 可选脚本命令
-
-提取 transcript：
-
-```powershell
-python scripts/extract_youtube_transcript.py "https://www.youtube.com/watch?v=VIDEO_ID" --output transcript.md
-```
-
-默认 `--supadata-mode auto`，会优先取已有字幕；没有字幕时允许 AI 生成。想节省额度时可手动使用：
-
-```powershell
-python scripts/extract_youtube_transcript.py "URL" --supadata-mode native
-```
-
-发布 Markdown 到飞书：
-
-```powershell
-python scripts/publish_feishu_doc.py --input outputs/video-title-study-notes.md --title "Video Title English Study Notes"
-```
-
-飞书发布脚本退出码：
-
-- `0`：成功，stdout 输出飞书文档 URL。
-- `1`：飞书已配置但发布失败。
-- `2`：飞书未配置，调用方应回退到 Markdown 输出。
-
-## 8. 学习文档内容
+## 7. 学习文档内容
 
 学习文档会包含：
 
