@@ -1,4 +1,0 @@
-interface:
-  display_name: "YouTube English Learning"
-  short_description: "Turn YouTube English lessons into focused study notes."
-  default_prompt: "Use $youtube-english-learning to analyze this YouTube English lesson and create a study document. Publish to Feishu if configured; otherwise deliver Markdown."
