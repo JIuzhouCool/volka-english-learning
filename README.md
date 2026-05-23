@@ -57,6 +57,8 @@ git clone https://github.com/JIuzhouCool/youtube-english-learning.git ~/.codex/s
 - 在「凭证与基础信息」获取 `App ID` 和 `App Secret`。
 - 给应用开通创建、编辑云文档所需权限。
 
+目前暂未配置发布到个人指定文件夹。飞书发布成功后，可以打开自建应用创建的共享文档，在飞书中手动保存一份到自己的目标文件夹。
+
 ## 4. 设置环境变量
 
 Windows PowerShell，当前会话：
@@ -111,14 +113,6 @@ Use $youtube-english-learning to analyze this YouTube English lesson:
 https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
-直接粘贴 transcript：
-
-```text
-Use $youtube-english-learning to turn this transcript into a Chinese-assisted study note:
-
-[paste transcript here]
-```
-
 交付规则：
 
 - 飞书发布成功：只返回飞书文档链接。
@@ -146,9 +140,3 @@ Use $youtube-english-learning to turn this transcript into a Chinese-assisted st
 - 复习卡片、小测和今日练习
 
 选词规则见 `references/vocabulary_selection.md`，文档模板见 `references/learning_doc_template.md`。
-
-## 注意事项
-
-- 不使用本地字幕回退、`yt-dlp`、音频下载或本地语音识别。
-- transcript 只是中间步骤，默认不要作为最终交付。
-- IPA 不确定时标记为 `approx.` 或 `近似`。
