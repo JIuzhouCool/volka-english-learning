@@ -22,8 +22,9 @@ Create one final Chinese-assisted English study document from a YouTube English 
 4. Draft the final study note as Markdown.
 5. Publish the draft with `scripts/publish_feishu_doc.py`.
    - Success: final reply should only include the Feishu document link.
-   - Feishu publishing requires saved user OAuth tokens. If missing, tell the user to run `python scripts/publish_feishu_doc.py --auth-url REDIRECT_URI`, open the URL, then run `python scripts/publish_feishu_doc.py --auth-code CODE`.
-   - On Windows, the publisher also checks User environment variables when the current process does not include `FEISHU_APP_ID`, `FEISHU_APP_SECRET`, or `FEISHU_FOLDER_TOKEN`; do not assume Feishu is unconfigured from process env alone.
+   - Feishu publishing reads `FEISHU_APP_ID` and `FEISHU_APP_SECRET` from the process environment first, then User environment variables on Windows if needed; do not assume Feishu is unconfigured from process env alone.
+   - `FEISHU_FOLDER_TOKEN` is optional. If it is set, the publisher uses that folder; otherwise it creates or reuses the skill folder named `YouTube English Learning Notes`.
+   - To inspect the folder the publisher will use, run `python scripts/publish_feishu_doc.py --print-location`.
    - Feishu not configured: write a Markdown fallback.
    - Feishu configured but failed: write a Markdown fallback and briefly mention the Feishu failure.
 6. For Markdown fallback, use `YOUTUBE_ENGLISH_OUTPUT_DIR` when set; otherwise write to `outputs/` under the skill directory. Create the directory first.

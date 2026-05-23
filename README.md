@@ -53,11 +53,12 @@ source ~/.zshrc
 
 ### 3.1 创建飞书应用
 
+这一步是为后续发布准备 `App ID`、`App Secret` 和权限。
+
 1. 打开 <https://open.feishu.cn/app>。
 2. 创建「企业自建应用」。
 3. 在「凭证与基础信息」复制 `App ID` 和 `App Secret`。
-4. 配置 OAuth 重定向 URL，例如 `https://example.com/callback`。
-5. 给应用开通创建和编辑新版文档所需权限，并确保包含 `offline_access`。
+4. 给应用开通创建和编辑云文档所需权限。
 
 ### 3.2 设置飞书环境变量
 
@@ -78,35 +79,9 @@ EOF
 source ~/.zshrc
 ```
 
-### 3.3 完成用户授权
+`FEISHU_FOLDER_TOKEN` 是可选项。它决定文档放到哪个文件夹，不决定是否能够发布。
 
-生成授权链接：
-
-```powershell
-python scripts/publish_feishu_doc.py --auth-url "https://example.com/callback"
-```
-
-打开输出的链接并完成授权。页面跳转后，从地址栏复制 `code` 参数，然后运行：
-
-```powershell
-python scripts/publish_feishu_doc.py --auth-code "paste_code_here"
-```
-
-成功后会输出：
-
-```text
-FEISHU_AUTH_SAVED
-```
-
-授权 token 默认保存到：
-
-```text
-%USERPROFILE%\.codex\youtube-english-learning\feishu_state.json
-```
-
-### 3.4 指定飞书文件夹，可选
-
-如果想把文档放到一个固定文件夹里，可以设置 `FEISHU_FOLDER_TOKEN`。
+如果你想把文档放到一个固定文件夹里，可以设置 `FEISHU_FOLDER_TOKEN`：
 
 1. 打开飞书云文档里的目标文件夹。
 2. 复制文件夹链接。
@@ -124,7 +99,13 @@ Windows PowerShell：
 setx FEISHU_FOLDER_TOKEN "fldcnxxxxxxxxxxxxxx"
 ```
 
-不设置 `FEISHU_FOLDER_TOKEN` 时，飞书会使用授权用户的默认文档位置。
+不设置 `FEISHU_FOLDER_TOKEN` 时，脚本会创建或复用默认的 `YouTube English Learning Notes` 文件夹。
+
+查看当前会使用的飞书文件夹位置：
+
+```powershell
+python scripts/publish_feishu_doc.py --print-location
+```
 
 ## 4. 使用
 
@@ -147,7 +128,8 @@ https://www.youtube.com/watch?v=VIDEO_ID
 输出规则：
 
 - 飞书配置完整：返回飞书文档链接。
-- 飞书未配置或发布失败：生成本地 Markdown。
+- 飞书未配置：生成本地 Markdown。
+- 飞书配置了但发布失败：生成本地 Markdown，并说明失败原因。
 - Markdown 默认写入 `outputs/`，也可以用 `YOUTUBE_ENGLISH_OUTPUT_DIR` 指定目录。
 
 常见问题：
@@ -156,5 +138,6 @@ https://www.youtube.com/watch?v=VIDEO_ID
 - Supadata 返回额度或限流错误：检查账户 credits，或稍后重试。
 - 视频没有可用英文字幕且远程转写失败：稍后重试，或换一个视频。
 - 飞书未配置：这不会阻止生成学习笔记，只会回退到 Markdown。
+- 如果想查看脚本实际读取到的飞书位置，运行 `python scripts/publish_feishu_doc.py --print-location`。
 
-不要把真实 API key、App Secret、OAuth code 或 token 提交到 GitHub。
+不要把真实 API key、App Secret 或 token 提交到 GitHub。
