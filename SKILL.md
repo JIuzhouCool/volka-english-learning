@@ -1,21 +1,25 @@
 ---
 name: youtube-english-learning
-description: Turn a YouTube English teaching video or pasted transcript into one polished Chinese-assisted study document. Use when the user wants to learn from a YouTube English lesson, extract the creator's intended vocabulary and phrases, and receive a final study note with IPA, Chinese meanings, examples, usage notes, review cards, and exercises. Requires Supadata for YouTube transcript extraction. Prefer publishing to Feishu when configured; otherwise deliver Markdown.
+description: Turn a YouTube or Bilibili English teaching video, or a pasted transcript, into one polished Chinese-assisted study document. Use when the user wants to learn from an English lesson, extract the creator's intended vocabulary and phrases, and receive a final study note with IPA, Chinese meanings, examples, usage notes, review cards, and exercises. YouTube requires Supadata. Bilibili uses yt-dlp plus local faster-whisper ASR fallback. Prefer publishing to Feishu when configured; otherwise deliver Markdown.
 ---
 
 # YouTube English Learning
 
 ## Purpose
 
-Create one final Chinese-assisted English study document from a YouTube English lesson or pasted transcript. The final deliverable should be a Feishu document when Feishu is configured; otherwise use Markdown.
+Create one final Chinese-assisted English study document from a YouTube or Bilibili English lesson, or from pasted transcript text. The final deliverable should be a Feishu document when Feishu is configured; otherwise use Markdown.
 
 ## Workflow
 
 1. Get the lesson text.
-   - For a YouTube URL, run `scripts/extract_youtube_transcript.py`.
-   - The transcript helper is Supadata-only and requires `SUPADATA_API_KEY`.
-   - Its default Supadata mode is `auto`: existing captions first, AI-generated transcript when captions are unavailable.
+   - For a video URL, run `scripts/extract_video_transcript.py`.
+   - YouTube URLs are delegated to Supadata and require `SUPADATA_API_KEY`.
+   - YouTube's default Supadata mode is `auto`: existing captions first, AI-generated transcript when captions are unavailable.
+   - Bilibili tries existing subtitles first, then falls back to local audio transcription.
+   - Downloaded temporary audio created for Bilibili transcription is deleted after success or failure.
    - If Supadata fails because of missing config, quota, rate limit, or API error, ask the user to fix Supadata, retry later, or paste the transcript.
+   - If Bilibili download fails, ask the user to retry later or paste the transcript directly.
+   - If local ASR dependencies are missing, ask the user to install `yt-dlp` and `faster-whisper`; if `yt-dlp` asks for `ffmpeg`, ask the user to install that too.
    - If the user pasted transcript text, use it directly.
 2. Read `references/vocabulary_selection.md` before selecting vocabulary.
 3. Read `references/learning_doc_template.md` before writing the study document.
@@ -23,7 +27,6 @@ Create one final Chinese-assisted English study document from a YouTube English 
 5. Publish the draft with `scripts/publish_feishu_doc.py`.
    - Success: final reply should only include the Feishu document link.
    - After successful Feishu publish, delete the local Markdown draft used as the publish input.
-   - On Windows, the publisher also checks User environment variables when the current process does not include `FEISHU_APP_ID` or `FEISHU_APP_SECRET`; do not assume Feishu is unconfigured from process env alone.
    - Feishu not configured: write a Markdown fallback.
    - Feishu configured but failed: write a Markdown fallback and briefly mention the Feishu failure.
 6. For Markdown fallback, use `YOUTUBE_ENGLISH_OUTPUT_DIR` when set; otherwise write to `outputs/` under the skill directory. Create the directory first.
