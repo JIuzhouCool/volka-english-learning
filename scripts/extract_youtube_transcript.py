@@ -159,7 +159,7 @@ def request_supadata_json(url: str, api_key: str) -> tuple[int, Any]:
         headers={
             "x-api-key": api_key,
             "accept": "application/json",
-            "user-agent": "youtube-english-learning-skill/1.0",
+            "user-agent": "volka-english-learning-skill/1.0",
         },
         method="GET",
     )

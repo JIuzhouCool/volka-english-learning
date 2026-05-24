@@ -1,5 +1,5 @@
 ---
-name: youtube-english-learning
+name: volka-english-learning
 description: Turn a YouTube or Bilibili English teaching video, or a pasted transcript, into one polished Chinese-assisted study document. Use when the user wants to learn from an English lesson, extract the creator's intended vocabulary and phrases, and receive a final study note with IPA, Chinese meanings, examples, usage notes, review cards, and exercises. YouTube requires Supadata. Bilibili uses yt-dlp plus local faster-whisper ASR fallback. Prefer publishing to Feishu when configured; otherwise deliver Markdown.
 ---
 

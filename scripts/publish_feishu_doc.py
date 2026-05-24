@@ -112,7 +112,7 @@ def request_json(
     headers = {
         "accept": "application/json",
         "content-type": "application/json; charset=utf-8",
-        "user-agent": "youtube-english-learning-skill/1.0",
+        "user-agent": "volka-english-learning-skill/1.0",
     }
     if token:
         headers["authorization"] = f"Bearer {token}"

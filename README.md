@@ -84,14 +84,14 @@ setx YOUTUBE_ENGLISH_OUTPUT_DIR "D:\notes\english"
 分析 YouTube 视频：
 
 ```text
-Use $youtube-english-learning to analyze this YouTube English lesson:
+Use $volka-english-learning to analyze this YouTube English lesson:
 https://www.youtube.com/watch?v=VIDEO_ID
 ```
 
 分析 Bilibili 视频：
 
 ```text
-Use $youtube-english-learning to analyze this Bilibili English lesson:
+Use $volka-english-learning to analyze this Bilibili English lesson:
 https://www.bilibili.com/video/BV...
 ```
 
