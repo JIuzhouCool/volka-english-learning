@@ -1,6 +1,6 @@
-# YouTube English Learning Skill
+# Volka English Learning Skill
 
-把 YouTube 英语教学视频整理成中文辅助学习文档：先用 Supadata 获取或生成英文 transcript，再生成学习笔记。默认优先发布到飞书；没有配置飞书或发布失败时，生成本地 Markdown。
+把 Volka English / YouTube 英语教学视频整理成中文辅助学习文档：先用 Supadata 获取或生成英文 transcript，再生成学习笔记。默认优先发布到飞书；没有配置飞书或发布失败时，生成本地 Markdown。
 
 ## 1. 直接让 Codex 安装
 
@@ -8,7 +8,7 @@
 
 ```text
 请使用 $skill-installer 安装这个 skill：
-https://github.com/JIuzhouCool/youtube-english-learning
+https://github.com/JIuzhouCool/volka-english-learning
 ```
 
 安装后重启 Codex，让 skill 被重新发现。
@@ -18,23 +18,23 @@ https://github.com/JIuzhouCool/youtube-english-learning
 Windows PowerShell：
 
 ```powershell
-python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" --repo JIuzhouCool/youtube-english-learning --path . --name youtube-english-learning
+python "$env:USERPROFILE\.codex\skills\.system\skill-installer\scripts\install-skill-from-github.py" --repo JIuzhouCool/volka-english-learning --path . --name volka-english-learning
 ```
 
 macOS/Linux：
 
 ```bash
-python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo JIuzhouCool/youtube-english-learning --path . --name youtube-english-learning
+python "$HOME/.codex/skills/.system/skill-installer/scripts/install-skill-from-github.py" --repo JIuzhouCool/volka-english-learning --path . --name volka-english-learning
 ```
 
 手动 clone：
 
 ```powershell
-git clone https://github.com/JIuzhouCool/youtube-english-learning.git "$env:USERPROFILE\.codex\skills\youtube-english-learning"
+git clone https://github.com/JIuzhouCool/volka-english-learning.git "$env:USERPROFILE\.codex\skills\volka-english-learning"
 ```
 
 ```bash
-git clone https://github.com/JIuzhouCool/youtube-english-learning.git ~/.codex/skills/youtube-english-learning
+git clone https://github.com/JIuzhouCool/volka-english-learning.git ~/.codex/skills/volka-english-learning
 ```
 
 ## 2. Supadata，必选

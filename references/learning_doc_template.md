@@ -2,6 +2,8 @@
 
 Use this structure when generating the final learning document. Keep the writing polished, practical, and friendly for Chinese-speaking English learners. The final deliverable is this study document only; do not include or attach the full transcript unless the user explicitly asks for it.
 
+Prefer this Feishu-friendly layout over wide Markdown tables. Wide tables are hard to read after conversion to Feishu Docx, especially on mobile. Use short sections, numbered vocabulary cards, and compact review tables instead.
+
 ```markdown
 # [视频/课程标题] 英语学习笔记
 
@@ -18,13 +20,31 @@ Use this structure when generating the final learning document. Keep the writing
 
 ## UP 主本课重点
 
-用项目符号列出 3-6 个教学重点。不要泛泛总结，要说清楚 UP 主反复讲解、举例或纠正的内容。
+- 用项目符号列出 3-6 个教学重点。
+- 不要泛泛总结，要说清楚 UP 主反复讲解、举例或纠正的内容。
+- 如果视频明确给出目标词、目标句型或学习任务，要优先写出来。
 
 ## 重点词汇与表达
 
-| # | 单词/短语 | IPA | 中文含义 | 语境解释 | 原文例句 | 学习例句 | 常见搭配/句型 |
-|---|---|---|---|---|---|---|---|
-| 1 |  |  |  |  |  |  |  |
+### 1. [单词/短语]
+
+- **IPA**：/[IPA]/
+- **中文含义**：
+- **语境解释**：
+- **原文例句**：
+- **学习例句**：
+- **常见搭配/句型**：
+
+### 2. [单词/短语]
+
+- **IPA**：
+- **中文含义**：
+- **语境解释**：
+- **原文例句**：
+- **学习例句**：
+- **常见搭配/句型**：
+
+继续按同样格式列出 15-25 个高价值单词、短语、搭配或句型。短视频可列 8-12 个；长词汇课最多可列 30 个。
 
 ## 易混点与用法提醒
 
@@ -49,15 +69,29 @@ Use this structure when generating the final learning document. Keep the writing
 2. 选词填空：
 3. 用本课表达造句：
 
+## 参考答案
+
+1.
+2.
+3.
+
 ## 今日练习
 
-给学习者 2-3 个可以马上练习的任务，例如仿写、跟读、录音复述或用 5 个表达写一段话。
+- 跟读练习：
+- 观察/描述练习：
+- 口头复述或写作练习：
 ```
 
 ## Style Requirements
 
 - Explanations should be mainly Chinese; English examples should sound natural.
-- Keep the table readable. If an original sentence is long, quote only the useful clause.
+- Make the document look like a readable Feishu note, not a spreadsheet.
+- Use numbered vocabulary sections (`### 1. phrase`) instead of a wide vocabulary table.
+- Keep each vocabulary item compact: 1-2 short Chinese sentences for context, one useful original sentence, and one learner-friendly example.
+- Use a small table only for review cards. Avoid large tables with many columns.
+- If an original sentence is long, quote only the useful clause.
 - Use `approx.` or `近似` for IPA if uncertain.
-- Prefer reusable examples: workplace, daily conversation, study, travel, relationships, or self-expression.
+- Prefer reusable examples: workplace, daily conversation, study, travel, relationships, nature, home, food, or self-expression.
+- If the creator explicitly teaches target words, put those first before adding extra useful phrases.
+- Include a `参考答案` section when the quiz has fixed answers.
 - Do not include, attach, or separately report a full transcript unless the user asks for it.
